@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using MySql.Data.MySqlClient;
-using TicketViewer.Models;
+using Microsoft.EntityFrameworkCore;
+using TicketViewer.Data;
+using TicketViewer.Helpers;
 
 namespace TicketViewer.Controllers
 {
@@ -8,43 +9,77 @@ namespace TicketViewer.Controllers
     [Route("api/[controller]")]
     public class RequestsController : ControllerBase
     {
-        private readonly IConfiguration _config;
+        private readonly ApplicationDbContext _context;
 
-        public RequestsController(IConfiguration config)
+        public RequestsController(ApplicationDbContext context)
         {
-            _config = config;
+            _context = context;
         }
 
         [HttpGet]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            var connectionString = _config.GetConnectionString("DefaultConnection");
-            var requests = new List<Requests>();
-
-            using var connection = new MySqlConnection(connectionString);
-            connection.Open();
-
-            string query = "SELECT * FROM requests";
-            using var cmd = new MySqlCommand(query, connection);
-            using var reader = cmd.ExecuteReader();
-
-            while (reader.Read())
-            {
-                requests.Add(new Requests
-                {
-                    Id = reader.GetInt32("id"),
-                    Number = reader["number"]?.ToString(),
-                    Status = reader["status"]?.ToString(),
-                    Responsible = reader["responsible"]?.ToString(),
-                    Category = reader["category"]?.ToString(),
-                    Header = reader["header"]?.ToString(),
-                    Initiator = reader["initiator"]?.ToString(),
-                    Date = reader["date"]?.ToString(),
-                    Counter = reader.GetInt32("counter")
-                });
-            }
+            var requests = await _context.Requests
+                .Select(r => r.ToDto())
+                .ToListAsync();
 
             return Ok(requests);
         }
+
+        // Дати для вибору на UI
+        [HttpGet("dates")]
+        public async Task<IActionResult> GetDateRange()
+        {
+            var minDate = await _context.Requests
+                .Where(r => r.Start_date != null)
+                .MinAsync(r => r.Start_date);
+
+            var maxDate = await _context.Requests
+                .Where(r => r.Start_date != null)
+                .MaxAsync(r => r.Start_date);
+
+            return Ok(new { minDate, maxDate });
+        }
     }
 }
+
+
+
+
+//Woorking version before changers
+//    public class RequestsController : ControllerBase
+//    {
+//        private readonly ApplicationDbContext _db;
+
+//        public RequestsController(ApplicationDbContext db)
+//        {
+//            _db = db;
+//        }
+
+//        [HttpGet]
+//        public async Task<IActionResult> GetAll()
+//        {
+//            var data = await _db.Requests.ToListAsync();
+//            return Ok(data);
+//        }
+//    }
+//}
+
+//Woorking version before changers
+//    public class RequestsController : ControllerBase
+//    {
+//        private readonly ApplicationDbContext _db;
+
+//        public RequestsController(ApplicationDbContext db)
+//        {
+//            _db = db;
+//        }
+
+//        [HttpGet]
+//        public async Task<IActionResult> GetAll()
+//        {
+//            var data = await _db.Requests.ToListAsync();
+//            return Ok(data);
+//        }
+//    }
+//}

@@ -5,6 +5,37 @@ using System.Text.RegularExpressions;
 
 class Program
 {
+    // ⬅ added: робимо статичним
+    static double ParseAgeToHours(string age)
+    {
+        if (string.IsNullOrWhiteSpace(age)) return 0;
+
+        int days = 0, hours = 0, minutes = 0;
+
+        var dayMatch = Regex.Match(age, @"(\d+)\s*дн");
+        var hourMatch = Regex.Match(age, @"(\d+)\s*ч");
+        var minMatch = Regex.Match(age, @"(\d+)\s*мин");
+
+        if (dayMatch.Success) days = int.Parse(dayMatch.Groups[1].Value);
+        if (hourMatch.Success) hours = int.Parse(hourMatch.Groups[1].Value);
+        if (minMatch.Success) minutes = int.Parse(minMatch.Groups[1].Value);
+
+        return days * 24 * 60 + hours * 60 + minutes;
+    }
+
+    // ⬅ added: конвертація дати dd.MM.yyyy HH:mm → ISO
+    static string ConvertDateToISO(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return "";
+
+        if (DateTime.TryParse(input, out var dt))
+            return dt.ToString("yyyy-MM-dd HH:mm:ss");
+
+        return "";
+    }
+
+
     static async Task Main()
     {
         using var playwright = await Playwright.CreateAsync();
@@ -18,13 +49,11 @@ class Program
         await page.GetByRole(AriaRole.Button, new() { Name = "Вхід" }).ClickAsync();
         await page.WaitForSelectorAsync(".MasterAction");
 
-        // --- Підготовка ---
         var allTickets = new List<Ticket>();
         var visitedPages = new HashSet<string>();
         var pageIdRegex = new Regex(@"Dashboard0130-TicketOpenPage(\d+)");
         int stableNoChangeCount = 0;
 
-        // --- Хелпер: отримати id усіх видимих сторінок ---
         async Task<List<string>> GetVisiblePageIds()
         {
             var ids = new List<string>();
@@ -43,18 +72,8 @@ class Program
             return ids;
         }
 
-        // --- Хелпер: отримати id активної сторінки ---
-        //async Task<string?> GetSelectedPageId()
-        //{
-        //    var sel = page.Locator("a.Selected[id^='Dashboard0130-TicketOpenPage']");
-        //    if (await sel.CountAsync() == 0) return null;
-        //    return await sel.GetAttributeAsync("id");
-        //}
-
-        // --- Хелпер: зчитати поточну сторінку ---
         async Task ExtractCurrentPageRows()
         {
-            await page.WaitForSelectorAsync(".MasterAction");
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             await Task.Delay(200);
 
@@ -66,27 +85,50 @@ class Program
                     var idValue = (await row.Locator("td:nth-child(3)").AllInnerTextsAsync()).FirstOrDefault() ?? "";
                     if (string.IsNullOrWhiteSpace(idValue)) continue;
 
+                    var prioritySpan = row.Locator("span[class^='PriorityID-']");
+                    var className = await prioritySpan.GetAttributeAsync("class");
+
+                    var match = Regex.Match(className, @"PriorityID-(\d+)");
+                    var priorityNumber = match.Success ? int.Parse(match.Groups[1].Value) : 0;
+
+                    string ageRaw = (await row.Locator("td:nth-child(10)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "";
+                    string startRaw = (await row.Locator("td:nth-child(11)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "";
+                    string changeRaw = (await row.Locator("td:nth-child(12)").InnerTextAsync()).Trim();
+                    string changeIso = ConvertDateToISO(changeRaw);
+
+                    // ⬅ added: конвертація
+                    double ageHours = ParseAgeToHours(ageRaw);
+                    string startIso = ConvertDateToISO(startRaw);
+
                     allTickets.Add(new Ticket
                     {
-
                         ID = idValue.Trim(),
+
+                        ////// ⬅ RAW
+                        //Start_date_raw = startRaw,
+                        //Age_raw = ageRaw,
+
+                        // ⬅ converted
+                        Start_date = startIso,
+                        AgeHours = ageHours,
+                        Change_date = changeIso,
+
+                        Priority = priorityNumber.ToString(),
                         Status = (await row.Locator("td:nth-child(4)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "",
                         Responsible = (await row.Locator("td:nth-child(5)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "",
                         Category = (await row.Locator("td:nth-child(6)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "",
                         Header = (await row.Locator("td:nth-child(7)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "",
-                        Initiator = (await row.Locator("td:nth-child(8)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? ""
+                        Initiator = (await row.Locator("td:nth-child(8)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? "",
+                        Area_ID = (await row.Locator("td:nth-child(9)").AllInnerTextsAsync()).FirstOrDefault()?.Trim() ?? ""
                     });
                 }
                 catch { }
             }
         }
 
-        // --- Головний цикл ---
         while (true)
         {
             var visibleIds = await GetVisiblePageIds();
-
-            Console.WriteLine($"🔍 Видимі сторінки: {string.Join(", ", visibleIds)}");
             bool clickedAnyInBlock = false;
 
             foreach (var id in visibleIds)
@@ -96,72 +138,31 @@ class Program
                 var btn = page.Locator($"a#{id}");
                 if (!await btn.IsVisibleAsync()) continue;
 
-                Console.WriteLine($"📄 Клікаємо сторінку: {id}");
                 visitedPages.Add(id);
 
                 await btn.ClickAsync();
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                await Task.Delay(400);
+                await Task.Delay(1000);
 
                 await ExtractCurrentPageRows();
                 clickedAnyInBlock = true;
             }
 
-            if (!clickedAnyInBlock)
-            {
-                Console.WriteLine("✅ Усі сторінки блоку вже оброблені.");
-            }
-
-            // --- Перехід на наступний блок ---
             var nextBtn = page.Locator("#Dashboard0130-TicketOpenPageOneForward");
             bool nextExists = await nextBtn.CountAsync() > 0 && await nextBtn.IsVisibleAsync();
 
             if (nextExists)
             {
                 var cls = (await nextBtn.GetAttributeAsync("class")) ?? "";
-                if (cls.Contains("Disabled"))
-                {
-                    Console.WriteLine("🏁 OneForward неактивний — завершуємо.");
-                    break;
-                }
+                if (cls.Contains("Disabled")) break;
 
-                var before = await GetVisiblePageIds();
-                Console.WriteLine("➡️ Переходимо на наступний блок...");
                 await nextBtn.ClickAsync();
                 await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
                 await Task.Delay(1500);
 
-                var after = await GetVisiblePageIds();
-                if (after.SequenceEqual(before))
-                {
-                    stableNoChangeCount++;
-                    if (stableNoChangeCount >= 2)
-                    {
-                        Console.WriteLine("⚠️ Немає змін після кількох спроб — завершення.");
-                        break;
-                    }
-                    continue;
-                }
-                stableNoChangeCount = 0;
                 continue;
             }
 
-            // --- Перевіряємо AllForward ---
-            var allForward = page.Locator("#Dashboard0130-TicketOpenPageAllForward");
-            if (await allForward.CountAsync() > 0 && await allForward.IsVisibleAsync())
-            {
-                var cls = (await allForward.GetAttributeAsync("class")) ?? "";
-                if (!cls.Contains("Disabled"))
-                {
-                    Console.WriteLine("➡️ Переходимо через AllForward (останні сторінки)...");
-                    await allForward.ClickAsync();
-                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                    await Task.Delay(1500);
-                    continue;
-                }
-            }
-
-            Console.WriteLine("🏁 Всі сторінки оброблені — кінець.");
             break;
         }
 
@@ -172,10 +173,9 @@ class Program
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
         string json = JsonSerializer.Serialize(allTickets, options);
-        await File.WriteAllTextAsync("tickets.json", json, Encoding.UTF8);
+        await File.WriteAllTextAsync("tickets-clean.json", json, Encoding.UTF8);
 
         Console.WriteLine($"✅ Зібрано записів: {allTickets.Count}");
-        Console.WriteLine("📁 Збережено у tickets.json");
         await browser.CloseAsync();
     }
 }
@@ -183,7 +183,12 @@ class Program
 class Ticket
 {
     public string? ID { get; set; }
+    public string? Start_date { get; set; }
+    public string? Change_date { get; set; }
+    public double AgeHours { get; set; }
 
+    public string? Area_ID { get; set; }
+    public string? Priority { get; set; }
     public string? Status { get; set; }
     public string? Responsible { get; set; }
     public string? Category { get; set; }

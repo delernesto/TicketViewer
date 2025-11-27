@@ -9,9 +9,9 @@ class Program
     static void Main()
     {
         // 1️⃣ Зчитуємо JSON
-        string jsonPath = @"D:\school\Diplom\Code\Diplom\Parse_data\bin\Debug\net8.0\tickets_new.json"; // твій файл з заявками
+        string jsonPath = @"D:\school\Diplom\Code\Diplom\Json_to_SQL\bin\Debug\net8.0\full_tickets_final.json";
         string json = File.ReadAllText(jsonPath);
-        var requests = JsonSerializer.Deserialize<List<Request>>(json);
+        var tickets = JsonSerializer.Deserialize<List<Ticket>>(json);
 
         // 2️⃣ Підключення до MySQL
         string connectionString = "Server=localhost;Database=project_data;Uid=root;Pwd=1234;";
@@ -19,21 +19,44 @@ class Program
         connection.Open();
 
         // 3️⃣ Вставка даних
-        foreach (var r in requests)
+        foreach (var t in tickets)
         {
-            string query = @"INSERT INTO requests 
-                 (`number`, `status`, `responsible`, `category`, `header`, `initiator`, `counter`)
-                 VALUES (@ID, @Status, @Responsible, @Category, @Header, @Initiator,  @Counter)";
+            string query = @"
+                INSERT INTO requests_full 
+                (`ID`, `Start_date`, `Change_date`, `AgeMinutes`, `Area_ID`, `Priority`,
+                 `Status`, `Responsible`, `Category`, `Header`, `Initiator`)
+                VALUES
+                (@ID, @Start_date, @Change_date, @AgeMinutes, @Area_ID, @Priority,
+                 @Status, @Responsible, @Category, @Header, @Initiator)
+                ON DUPLICATE KEY UPDATE
+                    `Start_date` = VALUES(`Start_date`),
+                    `Change_date` = VALUES(`Change_date`),
+                    `AgeMinutes` = VALUES(`AgeMinutes`),
+                    `Area_ID` = VALUES(`Area_ID`),
+                    `Priority` = VALUES(`Priority`),
+                    `Status` = VALUES(`Status`),
+                    `Responsible` = VALUES(`Responsible`),
+                    `Category` = VALUES(`Category`),
+                    `Header` = VALUES(`Header`),
+                    `Initiator` = VALUES(`Initiator`);
+            ";
 
             using var cmd = new MySqlCommand(query, connection);
-            cmd.Parameters.AddWithValue("@ID", r.ID);
-            cmd.Parameters.AddWithValue("@status", r.Status);
-            cmd.Parameters.AddWithValue("@responsible", r.Responsible);
-            cmd.Parameters.AddWithValue("@category", r.Category);
-            cmd.Parameters.AddWithValue("@header", r.Header);
-            cmd.Parameters.AddWithValue("@initiator", r.Initiator);
-            cmd.Parameters.AddWithValue("@date", r.Date);
-            cmd.Parameters.AddWithValue("@counter", r.Counter);
+
+            cmd.Parameters.AddWithValue("@ID", t.ID ?? "");
+            cmd.Parameters.AddWithValue("@Start_date", t.Start_date ?? "");
+            cmd.Parameters.AddWithValue("@Change_date", t.Change_date ?? "");
+
+            // ❗ JSON має AgeHours, але насправді це хвилини → тому вставляємо в AgeMinutes
+            cmd.Parameters.AddWithValue("@AgeMinutes", t.AgeHours);
+
+            cmd.Parameters.AddWithValue("@Area_ID", t.Area_ID ?? "");
+            cmd.Parameters.AddWithValue("@Priority", t.Priority ?? "");
+            cmd.Parameters.AddWithValue("@Status", t.Status ?? "");
+            cmd.Parameters.AddWithValue("@Responsible", t.Responsible ?? "");
+            cmd.Parameters.AddWithValue("@Category", t.Category ?? "");
+            cmd.Parameters.AddWithValue("@Header", t.Header ?? "");
+            cmd.Parameters.AddWithValue("@Initiator", t.Initiator ?? "");
 
             cmd.ExecuteNonQuery();
         }
@@ -42,15 +65,18 @@ class Program
     }
 }
 
-// 4️⃣ Клас для моделі заявки
-class Request
+// 4️⃣ Модель заявки (не змінюється)
+class Ticket
 {
-    public string ID { get; set; }
-    public string Status { get; set; }
-    public string Responsible { get; set; }
-    public string Category { get; set; }
-    public string Header { get; set; }
-    public string Initiator { get; set; }
-    public string Date { get; set; }
-    public int Counter { get; set; }
+    public string? ID { get; set; }
+    public string? Start_date { get; set; }
+    public string? Change_date { get; set; }
+    public double AgeHours { get; set; }   // у JSON так і лишається
+    public string? Area_ID { get; set; }
+    public string? Priority { get; set; }
+    public string? Status { get; set; }
+    public string? Responsible { get; set; }
+    public string? Category { get; set; }
+    public string? Header { get; set; }
+    public string? Initiator { get; set; }
 }
