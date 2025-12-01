@@ -16,7 +16,7 @@ const Login = () => {
 
     if (username === "admin" && password === "admin") {
       login();
-      navigate("/select");
+      navigate("/select-date");
     } else {
       setError("Невірний логін або пароль");
     }

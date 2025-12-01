@@ -18,12 +18,12 @@ namespace TicketViewer.Data
 
             modelBuilder.Entity<Requests>(entity =>
             {
-                entity.ToTable("requests_full");
+                // таблиця у MySQL
+                entity.ToTable("requests_clean");
 
-                // 🔥 Головний ключ — row_id
-                entity.HasKey(e => e.RowId);
+                // первинний ключ
+                entity.HasKey(e => e.Id);
 
-                entity.Property(e => e.RowId).HasColumnName("row_id");
                 entity.Property(e => e.Id).HasColumnName("ID");
 
                 entity.Property(e => e.Start_date).HasColumnName("Start_date");

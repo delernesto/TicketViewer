@@ -167,13 +167,18 @@ class Program
         }
 
         // --- Збереження ---
+        string outputDir = @"D:\school\Diplom\Code\Diplom\Parse_data\tickets";
+
+        string outputFile = Path.Combine(outputDir, "tickets.json");
+
+
         var options = new JsonSerializerOptions
         {
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
         string json = JsonSerializer.Serialize(allTickets, options);
-        await File.WriteAllTextAsync("tickets-clean.json", json, Encoding.UTF8);
+        await File.WriteAllTextAsync(outputFile, json, Encoding.UTF8);
 
         Console.WriteLine($"✅ Зібрано записів: {allTickets.Count}");
         await browser.CloseAsync();

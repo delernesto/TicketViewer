@@ -1,8 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
-import SelectDate from "./pages/SelectDate";
+import SelectDate from "./pages/SelectDatesPage";
 import type { ReactElement } from "react";
+<Route path="/select-date" element={<SelectDate />} />
+
 
 const PrivateRoute = ({ children }: { children: ReactElement }) => {
 
@@ -16,7 +18,7 @@ const App = () => {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route
-          path="/select"
+          path="/select-date"
           element={
             <PrivateRoute>
               <SelectDate />

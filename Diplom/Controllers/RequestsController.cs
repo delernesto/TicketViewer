@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using TicketViewer.Data;
-using TicketViewer.Helpers;
 
 namespace TicketViewer.Controllers
 {
@@ -16,17 +15,7 @@ namespace TicketViewer.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
-        {
-            var requests = await _context.Requests
-                .Select(r => r.ToDto())
-                .ToListAsync();
-
-            return Ok(requests);
-        }
-
-        // Дати для вибору на UI
+        // 1. Отримати мінімальну та максимальну дату
         [HttpGet("dates")]
         public async Task<IActionResult> GetDateRange()
         {
@@ -40,46 +29,24 @@ namespace TicketViewer.Controllers
 
             return Ok(new { minDate, maxDate });
         }
+
+        // 2. Отримати записи за діапазоном дат
+        [HttpGet]
+        public async Task<IActionResult> GetFiltered(
+            [FromQuery] DateTime? start,
+            [FromQuery] DateTime? end)
+        {
+            var query = _context.Requests.AsQueryable();
+
+            if (start.HasValue)
+                query = query.Where(r => r.Start_date >= start);
+
+            if (end.HasValue)
+                query = query.Where(r => r.Start_date <= end);
+
+            var data = await query.ToListAsync();
+
+            return Ok(new { count = data.Count, data });
+        }
     }
 }
-
-
-
-
-//Woorking version before changers
-//    public class RequestsController : ControllerBase
-//    {
-//        private readonly ApplicationDbContext _db;
-
-//        public RequestsController(ApplicationDbContext db)
-//        {
-//            _db = db;
-//        }
-
-//        [HttpGet]
-//        public async Task<IActionResult> GetAll()
-//        {
-//            var data = await _db.Requests.ToListAsync();
-//            return Ok(data);
-//        }
-//    }
-//}
-
-//Woorking version before changers
-//    public class RequestsController : ControllerBase
-//    {
-//        private readonly ApplicationDbContext _db;
-
-//        public RequestsController(ApplicationDbContext db)
-//        {
-//            _db = db;
-//        }
-
-//        [HttpGet]
-//        public async Task<IActionResult> GetAll()
-//        {
-//            var data = await _db.Requests.ToListAsync();
-//            return Ok(data);
-//        }
-//    }
-//}
